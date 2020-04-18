@@ -1,5 +1,6 @@
 var createError = require('http-errors');
 var express = require('express');
+var session = require('express-session');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
@@ -7,6 +8,20 @@ var sassMiddleware = require('node-sass-middleware');
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
+var loginRouter = require('./routes/login');
+
+var Acl       = require('acl');
+var AclSeq    = require('acl-sequelize');
+var db        = require('./models/index.js').sequelize;
+var acl       = new Acl(new AclSeq(db, { prefix: 'acl_' }));
+
+// Redis
+const redis = require('redis');
+const redisStore = require('connect-redis')(session);
+const client  = redis.createClient();
+
+// Define role permissions
+require('./scripts/define_role_permissions')(acl);
 
 var app = express();
 
@@ -24,8 +39,33 @@ app.use(sassMiddleware({
   indentedSyntax: true, // true = .sass and false = .scss
   sourceMap: true
 }));
+
+app.use(session({
+    secret: 'ssshhhhh',
+    // create new redis store.
+    store: new redisStore({ host: 'localhost', port: 6379, client: client, ttl : 260 }),
+    saveUninitialized: false,
+    resave: false
+}));
+
+// Add login route before acl middleware
+app.use('/login', loginRouter(acl));
+
+// Add public directory before acl middleware
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Add ACL middleware before protected routes
+const NUM_PATH_COMPONENTS = 1;
+function checkForPermissions() {
+  return acl.middleware(NUM_PATH_COMPONENTS, getUserId);
+}
+
+function getUserId(req) {
+  if (req.session && req.session.user) {
+    return req.session.user.id;
+  }
+}
+app.use(checkForPermissions());
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 
@@ -36,6 +76,12 @@ app.use(function(req, res, next) {
 
 // error handler
 app.use(function(err, req, res, next) {
+  // User not authenticated
+  if (err.errorCode == 401) {
+    res.redirect("/login");
+    return;
+  }
+
   // set locals, only providing error in development
   res.locals.message = err.message;
   res.locals.error = req.app.get('env') === 'development' ? err : {};

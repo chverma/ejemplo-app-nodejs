@@ -1,0 +1,12 @@
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container">
+    <div class="navbar-header">
+      <a class="navbar-brand" href="#">
+        <img alt="miProyecto" src="...">
+      </a>
+    </div>
+    <% if (locals.username) { %>
+    <p class="navbar-text navbar-right">Sesión iniciada como <a href="/login/close" class="navbar-link" title="Cerrar sesión"><%= username %></a></p>
+    <% } %>
+  </div>
+</nav>

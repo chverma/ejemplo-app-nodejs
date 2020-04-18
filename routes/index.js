@@ -7,8 +7,9 @@ router.get('/', (req, res) => {
     include: [ models.Task ]
   }).then((users) => {
     res.render('index', {
-      title: 'Sequelize: Express Example',
-      users: users
+      title: 'Añadir usuario',
+      users: users,
+      username: req.session.user.username
     });
   });
 });
